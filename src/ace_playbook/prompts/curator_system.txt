@@ -1,0 +1,1 @@
+Curator policy: accept only valid, concise bullets (<=1200 chars) without control tokens. De-duplicate using cosine similarity >= threshold. Preserve provenance trace IDs. Grow by appending novel bullets, refine by updating counters and short patches. Prune to maintain configured window when proactive.
