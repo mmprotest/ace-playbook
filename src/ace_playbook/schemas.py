@@ -1,14 +1,21 @@
-"""Data models for ACE without external dependencies."""
+"""Data models and schemas for ACE."""
 
 from __future__ import annotations
 
+import json
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from math import sqrt
+from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
+from pydantic import BaseModel, Field, conlist
+
+from .sanitize import sanitize_text, validate_bullet_body
+
 BulletKind = Literal["strategy", "rule", "pitfall", "template", "tool", "concept"]
+EditOp = Literal["inc_helpful", "inc_harmful", "patch"]
 
 
 def _now() -> datetime:
@@ -16,10 +23,8 @@ def _now() -> datetime:
 
 
 def _validate_body(body: str) -> str:
-    if len(body) > 1200:
-        raise ValueError("bullet body exceeds 1200 characters")
-    if "<<<" in body:
-        raise ValueError("prompt injection token detected")
+    body = sanitize_text(body)
+    validate_bullet_body(body)
     return body
 
 
@@ -37,6 +42,8 @@ class Bullet:
     score: float = 0.0
     embedding: Optional[List[float]] = None
     source_trace_ids: List[str] = field(default_factory=list)
+    version: int = 0
+    duplicate_of: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.body = _validate_body(self.body)
@@ -60,7 +67,7 @@ class Bullet:
 @dataclass
 class BulletPatch:
     bullet_id: str
-    op: Literal["inc_helpful", "inc_harmful", "patch"]
+    op: EditOp
     patch_text: Optional[str] = None
 
     def to_dict(self) -> Dict[str, object]:
@@ -95,18 +102,26 @@ class Trace:
         return cls(**payload)  # type: ignore[arg-type]
 
 
-@dataclass
-class Delta:
-    bullets: List[Bullet] = field(default_factory=list)
-    patches: List[BulletPatch] = field(default_factory=list)
-    traces: List[Trace] = field(default_factory=list)
+class BulletIn(BaseModel):
+    kind: Literal["strategy", "rule", "pitfall", "template", "tool", "concept"]
+    title: str = Field(..., max_length=160)
+    body: str = Field(..., max_length=1200)
+    tags: List[str] = []
 
-    def to_dict(self) -> Dict[str, object]:
-        return {
-            "bullets": [b.to_dict() for b in self.bullets],
-            "patches": [p.to_dict() for p in self.patches],
-            "traces": [t.to_dict() for t in self.traces],
-        }
+
+class DeltaEdit(BaseModel):
+    bullet_id: str
+    op: EditOp
+    patch_text: Optional[str] = None
+
+
+class Delta(BaseModel):
+    trace_ids: conlist(str, min_items=1)
+    new_bullets: List["BulletIn"]
+    edits: List[DeltaEdit] = []
+
+
+Delta.model_rebuild()
 
 
 @dataclass
@@ -129,6 +144,16 @@ class MergeReport:
 
     def to_dict(self) -> Dict[str, int]:
         return asdict(self)
+
+
+def export_delta_json_schema(path: str) -> Dict[str, object]:
+    """Export the strict Delta JSON schema to ``path``."""
+
+    schema = Delta.model_json_schema(mode="validation")
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(schema, indent=2), encoding="utf-8")
+    return schema
 
 
 def cosine_similarity(a: List[float], b: List[float]) -> float:

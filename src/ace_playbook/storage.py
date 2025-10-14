@@ -34,7 +34,9 @@ class PlaybookStorage:
                     harmful_count INTEGER DEFAULT 0,
                     score REAL DEFAULT 0,
                     embedding TEXT,
-                    source_trace_ids TEXT NOT NULL
+                    source_trace_ids TEXT NOT NULL,
+                    version INTEGER DEFAULT 0,
+                    duplicate_of TEXT
                 )
                 """
             )
@@ -61,7 +63,31 @@ class PlaybookStorage:
                 )
                 """
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_bullets_kind ON bullets(kind)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_bullets_tags ON bullets(tags)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_bullets_score_last_used ON bullets(score, last_used_at)"
+            )
+            self._run_migrations(conn)
             conn.commit()
+
+    def _run_migrations(self, conn: sqlite3.Connection) -> None:
+        info = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(bullets)").fetchall()
+        }
+        if "version" not in info:
+            conn.execute(
+                "ALTER TABLE bullets ADD COLUMN version INTEGER DEFAULT 0"
+            )
+        if "duplicate_of" not in info:
+            conn.execute(
+                "ALTER TABLE bullets ADD COLUMN duplicate_of TEXT"
+            )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -200,6 +226,8 @@ class PlaybookStorage:
             "score": bullet.score,
             "embedding": json.dumps(bullet.embedding) if bullet.embedding else None,
             "source_trace_ids": json.dumps(bullet.source_trace_ids),
+            "version": bullet.version,
+            "duplicate_of": bullet.duplicate_of,
         }
 
     def _row_to_bullet(self, row: sqlite3.Row) -> Bullet:
@@ -212,6 +240,8 @@ class PlaybookStorage:
             data["created_at"] = datetime.fromisoformat(data["created_at"])
         if data.get("last_used_at"):
             data["last_used_at"] = datetime.fromisoformat(data["last_used_at"])
+        if data.get("duplicate_of") is None:
+            data["duplicate_of"] = None
         return Bullet.from_dict(data)
 
     def _trace_to_row(self, trace: Trace) -> Dict[str, object]:
