@@ -40,6 +40,8 @@ class OnlinePipeline:
                 context = self.playbook.retrieve(episode.query)
                 trace = self.generator.run(episode.query, context)
                 trace.success = self._evaluate(trace, episode)
+                for bullet_id in trace.selected_bullet_ids:
+                    self.playbook.storage.update_usage(bullet_id, trace.success)
                 delta = self.reflector.reflect([trace], label=episode.answer)
                 self.playbook.update(delta)
                 yield trace
