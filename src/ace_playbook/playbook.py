@@ -9,7 +9,7 @@ from .config import ACEConfig
 from .curator import Curator
 from .embeddings import BaseEmbeddings, build_embedding_provider
 from .retrieval import Retriever
-from .schemas import ContextSlice, Delta, MergeReport
+from .schemas import ContextSlice, DeltaRuntime, MergeReport
 from .storage import PlaybookStorage
 
 
@@ -33,7 +33,7 @@ class Playbook:
     def retrieve(self, query: str) -> ContextSlice:
         return self.retriever.retrieve_for_query(query, self.embedder)
 
-    def update(self, delta: Delta) -> MergeReport:
+    def update(self, delta: DeltaRuntime) -> MergeReport:
         return self.curator.merge(delta)
 
     def stats(self) -> dict:

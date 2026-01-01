@@ -15,9 +15,12 @@ class DummyGenerator:
         return Trace(
             query=query,
             selected_bullet_ids=[bullet.id for bullet in context.bullets],
+            used_bullet_ids=[bullet.id for bullet in context.bullets],
+            misleading_bullet_ids=[],
+            attribution_notes={},
             prompt="[]",
             response="answer",
-            success=True,
+            success=False,
         )
 
 
@@ -26,10 +29,10 @@ class DummyReflector:
         pass
 
     def reflect(self, traces, label=None):
-        from ace_playbook.schemas import Bullet, Delta
+        from ace_playbook.schemas import Bullet, DeltaRuntime
 
         bullet = Bullet(kind="strategy", title="Always answer", body="Say answer", tags=["test"])
-        return Delta(bullets=[bullet])
+        return DeltaRuntime(bullets=[bullet])
 
 
 def test_offline_pipeline(monkeypatch, tmp_path):
