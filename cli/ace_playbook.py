@@ -10,7 +10,7 @@ import typer
 
 from ace_playbook.config import ACEConfig
 from ace_playbook.playbook import Playbook
-from ace_playbook.schemas import Delta
+from ace_playbook.schemas import DeltaSchema
 
 app = typer.Typer(help="Playbook utilities")
 
@@ -29,7 +29,7 @@ def retrieve(query: str, storage_path: Optional[Path] = typer.Option(None)) -> N
 @app.command()
 def merge(delta_path: Path, storage_path: Optional[Path] = typer.Option(None)) -> None:
     payload = json.loads(delta_path.read_text(encoding="utf-8"))
-    delta = Delta(**payload)
+    delta = DeltaSchema.model_validate(payload).to_runtime()
     config = ACEConfig.from_env()
     if storage_path:
         config = config.copy(update={"storage_path": storage_path})

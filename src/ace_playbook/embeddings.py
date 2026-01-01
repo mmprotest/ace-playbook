@@ -63,8 +63,14 @@ class LocalEmbeddings(BaseEmbeddings):
             self._model = None
             self._dim = 128
             return
-        self._model = SentenceTransformer(model_name)
-        self._dim = self._model.get_sentence_embedding_dimension()
+        try:
+            self._model = SentenceTransformer(model_name, local_files_only=True)
+            self._dim = self._model.get_sentence_embedding_dimension()
+        except Exception:  # noqa: BLE001
+            logger.warning("sentence-transformers model unavailable locally, using hashing embeddings")
+            self._model = None
+            self._dim = 128
+            return
 
     def embed_texts(self, texts: Iterable[str]) -> EmbeddingResult:
         payload = list(texts)

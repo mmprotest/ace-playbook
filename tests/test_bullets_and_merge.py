@@ -3,7 +3,7 @@ from __future__ import annotations
 from ace_playbook.config import ACEConfig
 from ace_playbook.curator import Curator
 from ace_playbook.embeddings import BaseEmbeddings, EmbeddingResult
-from ace_playbook.schemas import Bullet, Delta
+from ace_playbook.schemas import Bullet, DeltaRuntime
 from ace_playbook.storage import PlaybookStorage
 
 
@@ -20,7 +20,7 @@ def test_curator_deduplicates(tmp_path):
     curator = Curator(config, storage, embedder)
     bullet1 = Bullet(kind="strategy", title="One", body="Use math", tags=["math"], embedding=[1, 0])
     bullet2 = Bullet(kind="strategy", title="Two", body="Use math", tags=["math"], embedding=[1, 0])
-    delta = Delta(bullets=[bullet1, bullet2])
+    delta = DeltaRuntime(bullets=[bullet1, bullet2])
     report = curator.merge(delta)
     assert report.added == 1
     assert report.deduplicated >= 1

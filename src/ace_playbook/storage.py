@@ -46,6 +46,9 @@ class PlaybookStorage:
                     id TEXT PRIMARY KEY,
                     query TEXT NOT NULL,
                     selected_bullet_ids TEXT NOT NULL,
+                    used_bullet_ids TEXT NOT NULL,
+                    misleading_bullet_ids TEXT NOT NULL,
+                    attribution_notes TEXT NOT NULL,
                     prompt TEXT NOT NULL,
                     response TEXT NOT NULL,
                     success INTEGER NOT NULL,
@@ -87,6 +90,22 @@ class PlaybookStorage:
         if "duplicate_of" not in info:
             conn.execute(
                 "ALTER TABLE bullets ADD COLUMN duplicate_of TEXT"
+            )
+        trace_info = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(traces)").fetchall()
+        }
+        if "used_bullet_ids" not in trace_info:
+            conn.execute(
+                "ALTER TABLE traces ADD COLUMN used_bullet_ids TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "misleading_bullet_ids" not in trace_info:
+            conn.execute(
+                "ALTER TABLE traces ADD COLUMN misleading_bullet_ids TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "attribution_notes" not in trace_info:
+            conn.execute(
+                "ALTER TABLE traces ADD COLUMN attribution_notes TEXT NOT NULL DEFAULT '{}'"
             )
 
     @contextmanager
@@ -135,11 +154,14 @@ class PlaybookStorage:
         payload = self._trace_to_row(trace)
         with self._connect() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO traces (id, query, selected_bullet_ids, prompt, response, success, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO traces (id, query, selected_bullet_ids, used_bullet_ids, misleading_bullet_ids, attribution_notes, prompt, response, success, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     payload["id"],
                     payload["query"],
                     payload["selected_bullet_ids"],
+                    payload["used_bullet_ids"],
+                    payload["misleading_bullet_ids"],
+                    payload["attribution_notes"],
                     payload["prompt"],
                     payload["response"],
                     payload["success"],
@@ -249,6 +271,9 @@ class PlaybookStorage:
             "id": trace.id,
             "query": trace.query,
             "selected_bullet_ids": json.dumps(trace.selected_bullet_ids),
+            "used_bullet_ids": json.dumps(trace.used_bullet_ids),
+            "misleading_bullet_ids": json.dumps(trace.misleading_bullet_ids),
+            "attribution_notes": json.dumps(trace.attribution_notes),
             "prompt": trace.prompt,
             "response": trace.response,
             "success": 1 if trace.success else 0,
@@ -259,6 +284,9 @@ class PlaybookStorage:
     def _row_to_trace(self, row: sqlite3.Row) -> Trace:
         data = dict(row)
         data["selected_bullet_ids"] = json.loads(data["selected_bullet_ids"])
+        data["used_bullet_ids"] = json.loads(data.get("used_bullet_ids", "[]"))
+        data["misleading_bullet_ids"] = json.loads(data.get("misleading_bullet_ids", "[]"))
+        data["attribution_notes"] = json.loads(data.get("attribution_notes", "{}"))
         data["metadata"] = json.loads(data["metadata"])
         data["success"] = bool(data["success"])
         data["created_at"] = datetime.fromisoformat(data["created_at"])

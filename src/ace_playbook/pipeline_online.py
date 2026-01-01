@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, Iterator, Optional
 
 from .config import ACEConfig
+from .evaluation import get_evaluator
 from .generator import Generator
 from .playbook import Playbook
 from .reflector import Reflector
@@ -21,6 +22,8 @@ class Episode:
     query: str
     answer: Optional[str] = None
     metadata: Optional[dict] = None
+    evaluator: str = "exact"
+    evaluator_params: dict = field(default_factory=dict)
 
 
 class OnlinePipeline:
@@ -33,16 +36,19 @@ class OnlinePipeline:
 
     def run(self, episodes: Iterable[Episode]) -> Iterator[Trace]:
         for episode in episodes:
-            context = self.playbook.retrieve(episode.query)
-            trace = self.generator.run(episode.query, context)
-            trace.success = self._evaluate(trace, episode)
-            delta = self.reflector.reflect([trace], label=episode.answer)
-            self.playbook.update(delta)
-            yield trace
+            for iteration in range(self.config.n_reflect_iterations):
+                context = self.playbook.retrieve(episode.query)
+                trace = self.generator.run(episode.query, context)
+                trace.success = self._evaluate(trace, episode)
+                delta = self.reflector.reflect([trace], label=episode.answer)
+                self.playbook.update(delta)
+                yield trace
 
     def _evaluate(self, trace: Trace, episode: Episode) -> bool:
-        if episode.answer is None:
-            return trace.success
-        expected = (episode.answer or "").strip().lower()
-        actual = (trace.response or "").strip().lower()
-        return expected in actual
+        expected = episode.answer
+        if expected is None and episode.metadata:
+            expected = episode.metadata.get("expected")
+        if expected is None:
+            return False
+        evaluator = get_evaluator(episode.evaluator, episode.evaluator_params)
+        return evaluator.evaluate(expected or "", trace.response or "", episode.evaluator_params)

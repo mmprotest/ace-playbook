@@ -9,7 +9,7 @@ from typing import Dict, Iterable, List, Tuple
 
 from .config import ACEConfig
 from .embeddings import BaseEmbeddings
-from .schemas import Bullet, BulletPatch, Delta, MergeReport, cosine_similarity
+from .schemas import Bullet, BulletPatch, DeltaRuntime, MergeReport, cosine_similarity
 from .storage import PlaybookStorage
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class Curator:
     storage: PlaybookStorage
     embedder: BaseEmbeddings
 
-    def merge(self, delta: Delta) -> MergeReport:
+    def merge(self, delta: DeltaRuntime) -> MergeReport:
         logger.info("Merging delta with %d bullets and %d patches", len(delta.bullets), len(delta.patches))
         valid_bullets = self._validate_bullets(delta.bullets)
         vectors = self.embedder.embed_texts([b.body for b in valid_bullets]).vectors
@@ -62,17 +62,35 @@ class Curator:
         if not bullets:
             return []
         keep: List[Bullet] = []
+        existing_bullets, existing_vectors = self.storage.fetch_embeddings()
         for bullet in bullets:
             duplicate_found = False
-            for existing in keep:
-                if not existing.embedding or not bullet.embedding:
-                    continue
-                if cosine_similarity(existing.embedding, bullet.embedding) >= self.config.dedup_cosine_threshold:
-                    duplicate_found = True
-                    existing.helpful_count += bullet.helpful_count
-                    existing.tags = sorted(set(existing.tags) | set(bullet.tags))
-                    existing.source_trace_ids = list(set(existing.source_trace_ids + bullet.source_trace_ids))
-                    break
+            if bullet.embedding:
+                for stored_bullet, stored_vector in zip(existing_bullets, existing_vectors):
+                    if cosine_similarity(stored_vector, bullet.embedding) >= self.config.dedup_cosine_threshold:
+                        duplicate_found = True
+                        logger.info(
+                            "Rejected bullet %s as duplicate of %s (cosine >= %.2f)",
+                            bullet.title,
+                            stored_bullet.id,
+                            self.config.dedup_cosine_threshold,
+                        )
+                        break
+            if not duplicate_found:
+                for existing in keep:
+                    if not existing.embedding or not bullet.embedding:
+                        continue
+                    if cosine_similarity(existing.embedding, bullet.embedding) >= self.config.dedup_cosine_threshold:
+                        duplicate_found = True
+                        existing.helpful_count += bullet.helpful_count
+                        existing.tags = sorted(set(existing.tags) | set(bullet.tags))
+                        existing.source_trace_ids = list(set(existing.source_trace_ids + bullet.source_trace_ids))
+                        logger.info(
+                            "Merged duplicate incoming bullet %s into %s",
+                            bullet.title,
+                            existing.id,
+                        )
+                        break
             if not duplicate_found:
                 keep.append(bullet)
         return keep
@@ -88,7 +106,10 @@ class Curator:
             elif patch.op == "inc_harmful":
                 bullet.harmful_count += 1
             elif patch.op == "patch" and patch.patch_text:
-                bullet.body = patch.patch_text
+                if patch.patch_mode == "append":
+                    bullet.body = f"{bullet.body}\n{patch.patch_text}".strip()
+                else:
+                    bullet.body = patch.patch_text
             updated_bullets.append(bullet)
         if updated_bullets:
             self.storage.upsert_bullets(updated_bullets)
