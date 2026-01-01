@@ -94,6 +94,10 @@ class Reflector:
             for patch in delta.patches
             if patch.bullet_id in misleading_ids and patch.bullet_id not in helpful_ids
         ]
+        trace_ids = [trace.id for trace in traces]
+        for bullet in filtered_bullets:
+            if not bullet.source_trace_ids:
+                bullet.source_trace_ids = trace_ids
         return DeltaRuntime(
             bullets=filtered_bullets,
             patches=filtered_patches,

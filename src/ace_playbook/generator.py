@@ -56,8 +56,6 @@ class Generator:
             },
         )
         self.storage.record_trace(trace)
-        for bullet_id in trace.selected_bullet_ids:
-            self.storage.update_usage(bullet_id, trace.success)
         return trace
 
     def _parse_output(self, output: str) -> Dict[str, object]:

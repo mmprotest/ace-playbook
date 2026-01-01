@@ -261,6 +261,24 @@ class DeltaSchema(BaseModel):
             traces=[TraceSchema.from_runtime(item) for item in delta.traces],
         )
 
+Delta = DeltaRuntime
+
+__all__ = [
+    "Bullet",
+    "BulletPatch",
+    "Trace",
+    "Delta",
+    "DeltaRuntime",
+    "DeltaSchema",
+    "ContextSlice",
+    "MergeReport",
+    "BulletSchema",
+    "BulletPatchSchema",
+    "TraceSchema",
+    "export_delta_json_schema",
+    "cosine_similarity",
+]
+
 
 @dataclass
 class ContextSlice:

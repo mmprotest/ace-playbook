@@ -74,6 +74,8 @@ class OfflinePipeline:
                     trace = self.generator.run(task.query, context)
                     trace.metadata["expected_answer"] = task.answer or ""
                     trace.success = self._evaluate(trace, task)
+                    for bullet_id in trace.selected_bullet_ids:
+                        self.playbook.storage.update_usage(bullet_id, trace.success)
                     delta = self.reflector.reflect([trace], label=task.answer)
                     self.playbook.update(delta)
 
