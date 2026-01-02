@@ -33,15 +33,17 @@ Agentic Context Engineering (ACE) is a three-role loop—**Generator**, **Reflec
 ```bash
 pip install -e .
 export OPENAI_API_KEY=sk-...
-# optional: export OPENAI_BASE_URL=http://localhost:8000/v1
+# optional: export ACE_BASE_URL=http://localhost:8000/v1
+# optional: export ACE_EMBEDDING_BASE_URL=http://localhost:8000/v1
 
-python -m cli.ace_offline train --data_path data/train.csv --epochs 3
-python -m cli.ace_online rollout --data_path data/test.csv
+python -m cli.ace_offline train data/train.csv --epochs 3
+python -m cli.ace_online rollout data/test.csv
 python -m cli.ace_playbook retrieve "How do I price a bond?"
-python -m cli.ace_offline export --storage-path ace_playbook.sqlite --output-path playbook.json
+python -m cli.ace_offline export ace_playbook.sqlite --output-path playbook.json
 ```
 
-The offline loop optimizes contexts on a training split, while the online loop adapts during evaluation episodes.
+The offline loop optimizes contexts on a training split, while the online loop adapts during evaluation episodes. CSV
+inputs should include `question` and `answer` columns (optional `evaluator` and `tolerance` columns are supported).
 
 ## Storage & Retrieval
 
